@@ -1,13 +1,13 @@
 astor
 numpy
 pytest
-torch
+# torch
 scipy
 scikit-learn
 tensorflow
-torchaudio
-torchtext
-torchvision
+# torchaudio
+# torchtext
+# torchvision
 pandas
 matplotlib
 hypothesis

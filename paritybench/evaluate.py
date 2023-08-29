@@ -8,11 +8,19 @@ from multiprocessing.pool import ThreadPool
 import pandas as pd
 import torch
 import torch._dynamo
+import torch._dynamo.config
+from typing import List
+torch._dynamo.config.output_code = True
+torch._dynamo.config.verbose = True
+
+def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
+    return gm.forward
+
 from torch.testing._internal.jit_utils import JitTestCase
 
 from paritybench.reporting import ErrorAggregatorDict, Stats
 from paritybench.utils import import_file, get_skiplist, subproc_wrapper, wrap_args, wrap_kwargs
-
+import traceback
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +38,7 @@ class ExportFailed(RuntimeError):
     pass
 
 
-def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, main_args, path):
+def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, main_args, path, index=-1):
     """
     Run an nn.Module with torch.jit.script and see if it works the same
     as eager.
@@ -109,7 +117,37 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
             result3 = nn_script(*args, **kwargs)
         else:
             torch._dynamo.reset()
-            compiled_model = torch._dynamo.optimize(main_args.backend)(nn)
+            compiled_model = torch._dynamo.optimize(custom_backend)(nn)
+            result3 = compiled_model(*args, **kwargs)
+            (
+                explanation,
+                out_guards,
+                graphs,
+                ops_per_graph,
+                break_reasons,
+                explanation_verbose,
+            ) = torch._dynamo.explain(compiled_model, *args, **kwargs)
+            log_path = 'logs/' + path.split('/')[-1].split('.')[0] + "." + str(index) + '.log'
+            with open(log_path, 'w') as f:
+                print(explanation_verbose, file=f)
+                for i, (graph_guard, graph, ops, break_reason) in enumerate(zip(
+                    out_guards, graphs, ops_per_graph, break_reasons
+                )):
+                    print("GRAPH", i, file=f)
+                    print("++graph_guard:", len(graph_guard), file=f)
+                    for guard in graph_guard:
+                        print(guard, file=f)
+                    print("++graph:", file=f)
+                    print(graph.print_readable(print_output=False), file=f)
+                    print("++ops:", len(ops), file=f)
+                    for op in ops:
+                        print(op, file=f)
+                    print("++break_reason:", break_reason.reason, file=f)
+                    print("".join(traceback.format_list(break_reason.user_stack)), file=f)
+                print("finish", file=f)
+
+            torch._dynamo.reset()
+            compiled_model = torch._dynamo.optimize(custom_backend)(nn)
             result3 = compiled_model(*args, **kwargs)
 
     except Exception as e:
@@ -136,6 +174,7 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
     :param path: *.py file to test
     :return: errors, stats
     """
+    print("Evaluating", path)
     errors = ErrorAggregatorDict(path)
     stats = Stats()
     module = import_file(path)
@@ -169,7 +208,8 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
                 get_forward_args,
                 partial(errors.record, module=repro),
                 main_args=args,
-                path=path)
+                path=path,
+                index=index,)
             stats["tests_passed"] += int(rv)
         except JitFailed:
             pass
