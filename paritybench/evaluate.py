@@ -10,8 +10,10 @@ import torch
 import torch._dynamo
 import torch._dynamo.config
 from typing import List
-torch._dynamo.config.output_code = True
-torch._dynamo.config.verbose = True
+torch._dynamo.config.output_code = False
+torch._dynamo.config.verbose = False
+
+from frontend.compile import compile, reset
 
 def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     return gm.forward
@@ -37,6 +39,11 @@ class JitFailed(RuntimeError):
 class ExportFailed(RuntimeError):
     pass
 
+class PytorchFailed(RuntimeError):
+    pass
+
+class GraphFailed(RuntimeError):
+    pass
 
 def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, main_args, path, index=-1):
     """
@@ -57,6 +64,7 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         raise EagerFailed()
 
     device = torch.device(main_args.device)
+    # device = "cpu"
 
     try:
         nn.eval()
@@ -81,6 +89,12 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
     except Exception as e:
         record_error('run_eager', e)
         raise EagerFailed()
+
+    try:
+        JitTestCase().assertEqual(result1, result2)
+    except Exception as e:
+        record_error("pytorch output not solitary", e)
+        raise PytorchFailed()
 
     if main_args.onnxdir:
         try:
@@ -116,39 +130,45 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         if nn_script:
             result3 = nn_script(*args, **kwargs)
         else:
-            torch._dynamo.reset()
-            compiled_model = torch._dynamo.optimize(custom_backend)(nn)
-            result3 = compiled_model(*args, **kwargs)
-            (
-                explanation,
-                out_guards,
-                graphs,
-                ops_per_graph,
-                break_reasons,
-                explanation_verbose,
-            ) = torch._dynamo.explain(compiled_model, *args, **kwargs)
-            log_path = 'logs/' + path.split('/')[-1].split('.')[0] + "." + str(index) + '.log'
-            with open(log_path, 'w') as f:
-                print(explanation_verbose, file=f)
-                for i, (graph_guard, graph, ops, break_reason) in enumerate(zip(
-                    out_guards, graphs, ops_per_graph, break_reasons
-                )):
-                    print("GRAPH", i, file=f)
-                    print("++graph_guard:", len(graph_guard), file=f)
-                    for guard in graph_guard:
-                        print(guard, file=f)
-                    print("++graph:", file=f)
-                    print(graph.print_readable(print_output=False), file=f)
-                    print("++ops:", len(ops), file=f)
-                    for op in ops:
-                        print(op, file=f)
-                    print("++break_reason:", break_reason.reason, file=f)
-                    print("".join(traceback.format_list(break_reason.user_stack)), file=f)
-                print("finish", file=f)
+            # torch._dynamo.reset()
+            # compiled_model = torch._dynamo.optimize(custom_backend)(nn)
+            # result3 = compiled_model(*args, **kwargs)
+            # (
+            #     explanation,
+            #     out_guards,
+            #     graphs,
+            #     ops_per_graph,
+            #     break_reasons,
+            #     explanation_verbose,
+            # ) = torch._dynamo.explain(compiled_model, *args, **kwargs)
+            # log_path = 'logs/' + path.split('/')[-1].split('.')[0] + "." + str(index) + '.log'
+            # with open(log_path, 'w') as f:
+            #     print(explanation_verbose, file=f)
+            #     for i, (graph_guard, graph, ops, break_reason) in enumerate(zip(
+            #         out_guards, graphs, ops_per_graph, break_reasons
+            #     )):
+            #         print("GRAPH", i, file=f)
+            #         print("++graph_guard:", len(graph_guard), file=f)
+            #         for guard in graph_guard:
+            #             print(guard, file=f)
+            #         print("++graph:", file=f)
+            #         print(graph.print_readable(print_output=False), file=f)
+            #         print("++ops:", len(ops), file=f)
+            #         for op in ops:
+            #             print(op, file=f)
+            #         print("++break_reason:", break_reason.reason, file=f)
+            #         print("".join(traceback.format_list(break_reason.user_stack)), file=f)
+            #     print("finish", file=f)
 
-            torch._dynamo.reset()
-            compiled_model = torch._dynamo.optimize(custom_backend)(nn)
-            result3 = compiled_model(*args, **kwargs)
+            # torch._dynamo.reset()
+            # compiled_model = torch._dynamo.optimize(custom_backend)(nn)
+            # result3 = compiled_model(*args, **kwargs)
+
+            # frontend compiler 
+            reset()
+            compiled = compile(nn)
+            compiled(*args, **kwargs)
+            result3 = compiled(*args, **kwargs)
 
     except Exception as e:
         record_error('run_jit {} '.format(main_args.compile_mode), e)
@@ -161,7 +181,14 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         except Exception as e:
             record_error('check_output', e)
             raise JitFailed()
+        # try:
+        #     JitTestCase().assertEqual(len(1), 1)
+        # except Exception as e:
+        #     record_error('has graph breaks', e)
+        #     raise GraphFailed()
     except AssertionError:
+        record_error("pytorch output not solitary1", e)
+        raise PytorchFailed()
         pass  # output is not deterministic, cant check it -- assuming correct
 
     return True
@@ -183,6 +210,8 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
         return errors, stats
 
     stats["projects"] += 1
+    stats["compile"] += 1
+    stats["graph"] += 1
 
     index = -1
     for nn_cls, get_init_args, get_forward_args, compiles in module.TESTCASES:
@@ -212,22 +241,39 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
                 index=index,)
             stats["tests_passed"] += int(rv)
         except JitFailed:
+            stats["jit_failed"] += 1
             pass
         except EagerFailed:
             stats["eager_failed"] += 1
         except OnnxFailed:
             pass
+        except PytorchFailed:
+            stats["random_failed"] += 1
+            pass
+        except GraphFailed:
+            stats["graph_failed"] += 1
 
-    stats["tests"] = stats["tests"] - stats["eager_failed"]
+    # stats["tests"] means pytorch test compiled by JIT compiler
+    stats["tests"] = stats["tests"] - stats["eager_failed"] - stats["random_failed"]
     stats["tests_failed"] = stats["tests"] - stats["tests_passed"]
 
     if not stats["tests"]:
         # eager failed not the jit, remove from totals
         stats["projects"] -= 1
+        stats["compile"] -= 1
+        stats["graph"] -= 1
     elif stats["tests_failed"]:
         stats["projects_failed"] += 1
     else:
         stats["projects_passed"] += 1
+    if stats["graph_failed"]:
+        stats["graph_break_project"] += 1
+    else:
+        stats["graph_passed"] += 1
+    if stats["jit_failed"]:
+        stats["compile_or_output_project"] += 1
+    else:
+        stats["compile_passed"] += 1
 
     return errors, stats
 
@@ -263,7 +309,7 @@ def evaluate_all(args, tests_dir: str = './generated', limit: int = None,
         stats.update(stats_part)
     pool.close()
     errors.print_report()
-    index = ("projects", "tests")
+    index = ("projects", "tests", "compile", "graph")
     report = pd.DataFrame(
         [[stats[f"{k}"], stats[f"{k}_passed"], "{:.1%}".format(stats[f"{k}_passed"] / (stats[f"{k}"] or 1))]
          for k in index],

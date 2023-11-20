@@ -24,14 +24,23 @@ class Stats(Counter):
             "deduced_args_ok",
             "jit_compiles",
             "projects",
+            "compile",
+            "graph",
             "projects_passed",
             "projects_failed",
+            "graph_passed",
+            "compile_passed",
             "tests",
             "tests_passed",
             "tests_failed",
+            "random_failed",
+            "graph_failed",
+            "jit_failed",
+            "graph_break_project",
+            "compile_or_output_project",
         ]
         stats_keys = stats_keys + list(set(self.keys()) - set(stats_keys))
-        return str([(k, self[k]) for k in stats_keys if k in self])
+        return str([(k, self[k]) for k in stats_keys])
 
 
 class ErrorAggregator(object):
