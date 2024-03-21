@@ -10,8 +10,8 @@ import torch
 import torch._dynamo
 import torch._dynamo.config
 from typing import List
-torch._dynamo.config.output_code = False
-torch._dynamo.config.verbose = False
+# torch._dynamo.config.output_code = False
+# torch._dynamo.config.verbose = False
 
 from frontend.compile import compile, reset
 from frontend.config import set_config
@@ -21,7 +21,7 @@ def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor])
 
 from torch.testing._internal.jit_utils import JitTestCase
 
-from paritybench.reporting import ErrorAggregatorDict, Stats
+from paritybench.reporting import ErrorAggregatorDict, Stats, time_tag
 from paritybench.utils import import_file, get_skiplist, subproc_wrapper, wrap_args, wrap_kwargs, get_eagerlist
 
 log = logging.getLogger(__name__)
@@ -130,40 +130,10 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         if nn_script:
             result3 = nn_script(*args, **kwargs)
         elif main_args.compile_mode == 'dynamo':
-            # torch._dynamo.reset()
-            # compiled_model = torch._dynamo.optimize(nopython=True)(nn)
-            # result3 = compiled_model(*args, **kwargs)
-            # (
-            #     explanation,
-            #     out_guards,
-            #     graphs,
-            #     ops_per_graph,
-            #     break_reasons,
-            #     explanation_verbose,
-            # ) = torch._dynamo.explain(compiled_model, *args, **kwargs)
-            # log_path = 'logs/' + path.split('/')[-1].split('.')[0] + "." + str(index) + '.log'
-            # with open(log_path, 'w') as f:
-            #     print(explanation_verbose, file=f)
-            #     for i, (graph_guard, graph, ops, break_reason) in enumerate(zip(
-            #         out_guards, graphs, ops_per_graph, break_reasons
-            #     )):
-            #         print("GRAPH", i, file=f)
-            #         print("++graph_guard:", len(graph_guard), file=f)
-            #         for guard in graph_guard:
-            #             print(guard, file=f)
-            #         print("++graph:", file=f)
-            #         print(graph.print_readable(print_output=False), file=f)
-            #         print("++ops:", len(ops), file=f)
-            #         for op in ops:
-            #             print(op, file=f)
-            #         print("++break_reason:", break_reason.reason, file=f)
-            #         print("".join(traceback.format_list(break_reason.user_stack)), file=f)
-            #     print("finish", file=f)
-
             torch._dynamo.reset()
-            compiled_model = torch._dynamo.optimize(nopython=True)(nn)
+            compiled_model = torch._dynamo.optimize(custom_backend, nopython=True)(nn)
             result3 = compiled_model(*args, **kwargs)
-        else: # frontend compiler 
+        elif main_args.compile_mode == 'sys':
             reset()
             with torch.no_grad():
                 if f"{path}:{nn_cls.__name__}" in get_eagerlist(main_args):
@@ -195,20 +165,15 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         except Exception as e:
             record_error('check_output', e)
             raise JitFailed()
-        # try:
-        #     JitTestCase().assertEqual(len(break_reasons), 1)
-        # except Exception as e:
-        #     record_error('has graph breaks', e)
-        #     raise GraphFailed()
     except AssertionError:
-        record_error("pytorch output not solitary1", e)
+        record_error("wrong_result", e)
         raise PytorchFailed()
         pass  # output is not deterministic, cant check it -- assuming correct
 
     return True
 
 
-def evaluate_pyfile_subproc(tempdir: str, path: str, args):
+def evaluate_pyfile_subproc(tempdir: str, path: str, args, log_folder=None):
     """
     Evaluate/test all the TESTCASES in path.
 
@@ -216,7 +181,7 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
     :return: errors, stats
     """
     print("Evaluating", path)
-    errors = ErrorAggregatorDict(path)
+    errors = ErrorAggregatorDict(path, log_folder)
     stats = Stats()
     module = import_file(path)
 
@@ -288,7 +253,7 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
         stats["compile_or_output_project"] += 1
     else:
         stats["compile_passed"] += 1
-    # errors.print_report()
+    print(f"==== stats of path {path}: {stats}")
     return errors, stats
 
 
@@ -304,7 +269,9 @@ def evaluate_all(args, tests_dir: str = './generated', limit: int = None,
     :param fn: inner function to run the tests
     :param jobs: how many processes to run at once
     """
-    feval = partial(evaluate_pyfile_subproc, args=args)
+    log_folder = f'logs/{time_tag}'
+    os.makedirs(log_folder)
+    feval = partial(evaluate_pyfile_subproc, args=args, log_folder=log_folder)
     fn = partial(subproc_wrapper, fn=feval)
     start = time.time()
     stats = Stats()

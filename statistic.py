@@ -9,7 +9,7 @@ pattern = r"INFO \[main\.py:\d+\] Stats: \[\('total', (\d+)\), \('init_ok', (\d+
 
 eager_pattern = r"INFO \[main\.py:\d+\] Stats: \[\('total', (\d+)\), \('init_ok', (\d+)\), \('deduced_args_ok', (\d+)\), \('jit_compiles', (\d+)\), \('projects', (\d+)\), \('compile', (\d+)\), \('graph', (\d+)\), \('projects_passed', (\d+)\), \('projects_failed', (\d+)\), \('graph_passed', (\d+)\), \('compile_passed', (\d+)\), \('tests', (\d+)\), \('tests_passed', (\d+)\), \('tests_failed', (\d+)\), \('random_failed', (\d+)\), \('graph_failed', (\d+)\), \('jit_failed', (\d+)\), \('graph_break_project', (\d+)\), \('compile_or_output_project', (\d+)\), \('eager_failed', (\d+)\)\]"
 
-bug_pattern = r"ERROR \[reporting\.py:\d+\] run_jit frotend  error from (.*\.py):(.*?)-k (test_\d+)"
+bug_pattern = r"ERROR \[reporting\.py:\d+\] run_jit sys  error from (.*\.py):(.*?)-k (test_\d+)"
 
 output_pattern = r"ERROR \[reporting\.py:\d+\] check_output error from (.*\.py):(.*?)-k (test_\d+)"
 

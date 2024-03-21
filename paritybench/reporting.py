@@ -5,9 +5,10 @@ import random
 import re
 from collections import Counter, defaultdict
 from typing import List
+import time
 
 log = logging.getLogger(__name__)
-
+time_tag = time.strftime("%Y%m%d-%H%M%S")
 
 class Stats(Counter):
     """
@@ -48,12 +49,13 @@ class ErrorAggregator(object):
     Collect and group error messages for report at the end
     """
 
-    def __init__(self, context=None, log=None):
+    def __init__(self, context=None, log=None, log_folder=None):
         super(ErrorAggregator, self).__init__()
         self.context = context or ""
         self.error_groups = []
         self.bigram_to_group_ids = defaultdict(list)
         self.log = log or logging.getLogger(__name__)
+        self.log_folder = log_folder
 
     def record(self, e: Exception, module):
         ex_msg = str(e).strip().split('\n')[0]
@@ -87,6 +89,12 @@ class ErrorAggregator(object):
         self.error_groups.append(errors)
         for bigram in msg_bigrams:
             self.bigram_to_group_ids[bigram].append(group_id)
+
+        if self.log_folder is not None:
+            for err in errors:
+                log_file = err[1].split("/")[-1]
+                with open(os.path.join(self.log_folder, log_file), 'a') as f:
+                    f.write(err[2] + '\n')
 
         return True
 
@@ -127,7 +135,7 @@ class ErrorAggregatorDict(object):
         errors.record(name, e, 'global')
         return errors
 
-    def __init__(self, context=None):
+    def __init__(self, context=None, log_folder=None):
         super(ErrorAggregatorDict, self).__init__()
         self.aggregator = dict()
         self.context = context
@@ -135,10 +143,11 @@ class ErrorAggregatorDict(object):
             self.name = re.sub(r"[.]zip$", "", os.path.basename(context))
         else:
             self.name = __name__
+        self.log_folder = log_folder
 
     def __getitem__(self, item):
         if item not in self.aggregator:
-            self.aggregator[item] = ErrorAggregator(self.context, logging.getLogger(f"{item}.{self.name}"))
+            self.aggregator[item] = ErrorAggregator(self.context, logging.getLogger(f"{item}.{self.name}"), self.log_folder)
         return self.aggregator[item]
 
     def update(self, other):
