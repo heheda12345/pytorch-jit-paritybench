@@ -63,6 +63,33 @@ You can evaluate using `cuda`(default) or `cpu`.
 python main.py -e <test.py file> --device cuda
 ```
 
+### Running with FROTEND
 
+you can use new compile mode ```sys``` to generate more full graphs in this benchmark!
 
+for single model evaluation
 
+``` 
+# check and update your configures in this script: preload directory, GPU command and so on
+./evaluate.sh
+```
+
+for all models in this repo
+
+```
+# check and update configures in your machine
+# NOTE: we use sbatch to run multiple jobs
+./evaluate-all.sh test-list.txt
+```
+
+you can use 
+```
+cat logs/your_generated_directory/* > profiling_result
+```
+and integrate all model results
+
+you can use
+```
+python statistic.py your_generated_profiling_result_directory stats
+```
+to see what scores our system can reach, the ```stats``` file includes details of failed models
