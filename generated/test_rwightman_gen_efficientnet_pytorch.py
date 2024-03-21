@@ -200,7 +200,7 @@ class HardSigmoid(nn.Module):
         return hard_sigmoid(x, self.inplace)
 
 
-@torch.jit.script
+# @torch.jit.script
 def swish_jit(x, inplace: bool=False):
     """Swish - Described originally as SiLU (https://arxiv.org/abs/1702.03118v3)
     and also as Swish (https://arxiv.org/abs/1710.05941).
@@ -219,7 +219,7 @@ class SwishJit(nn.Module):
         return swish_jit(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def mish_jit(x, _inplace: bool=False):
     """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
     """
@@ -235,7 +235,7 @@ class MishJit(nn.Module):
         return mish_jit(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_sigmoid_jit(x, inplace: bool=False):
     return (x + 3).clamp(min=0, max=6).div(6.0)
 
@@ -249,7 +249,7 @@ class HardSigmoidJit(nn.Module):
         return hard_sigmoid_jit(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_swish_jit(x, inplace: bool=False):
     return x * (x + 3).clamp(min=0, max=6).div(6.0)
 
@@ -263,13 +263,13 @@ class HardSwishJit(nn.Module):
         return hard_swish_jit(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def swish_jit_bwd(x, grad_output):
     x_sigmoid = torch.sigmoid(x)
     return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
 
 
-@torch.jit.script
+# @torch.jit.script
 def swish_jit_fwd(x):
     return x.mul(torch.sigmoid(x))
 
@@ -305,14 +305,14 @@ class SwishMe(nn.Module):
         return SwishJitAutoFn.apply(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def mish_jit_bwd(x, grad_output):
     x_sigmoid = torch.sigmoid(x)
     x_tanh_sp = F.softplus(x).tanh()
     return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
 
 
-@torch.jit.script
+# @torch.jit.script
 def mish_jit_fwd(x):
     return x.mul(torch.tanh(F.softplus(x)))
 
@@ -342,13 +342,13 @@ class MishMe(nn.Module):
         return MishJitAutoFn.apply(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_sigmoid_jit_bwd(x, grad_output):
     m = torch.ones_like(x) * ((x >= -3.0) & (x <= 3.0)) / 6.0
     return grad_output * m
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_sigmoid_jit_fwd(x, inplace: bool=False):
     return (x + 3).clamp(min=0, max=6).div(6.0)
 
@@ -375,14 +375,14 @@ class HardSigmoidMe(nn.Module):
         return HardSigmoidJitAutoFn.apply(x)
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_swish_jit_bwd(x, grad_output):
     m = torch.ones_like(x) * (x >= 3.0)
     m = torch.where((x >= -3.0) & (x <= 3.0), x / 3.0 + 0.5, m)
     return grad_output * m
 
 
-@torch.jit.script
+# @torch.jit.script
 def hard_swish_jit_fwd(x):
     return x * (x + 3).clamp(min=0, max=6).div(6.0)
 

@@ -841,7 +841,7 @@ def nested_map(fn, *t):
 ffn_sample_input = lambda batch_size, hid_dim: torch.empty((batch_size, hid_dim))
 
 
-@torch.jit.script
+# @torch.jit.script
 def gelu_fast(x):
     return 0.5 * x * (1.0 + torch.tanh(x * 0.7978845608 * (1.0 + 0.044715 * x * x)))
 

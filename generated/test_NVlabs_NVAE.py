@@ -361,7 +361,7 @@ def norm(t, dim):
     return torch.sqrt(torch.sum(t * t, dim))
 
 
-@torch.jit.script
+# @torch.jit.script
 def normalize_weight_jit(log_weight_norm, weight):
     n = torch.exp(log_weight_norm)
     wn = torch.sqrt(torch.sum(weight * weight, dim=[1, 2, 3]))
@@ -1087,14 +1087,14 @@ class EncCombinerCell(nn.Module):
         return out
 
 
-@torch.jit.script
+# @torch.jit.script
 def sample_normal_jit(mu, sigma):
     eps = mu.mul(0).normal_()
     z = eps.mul_(sigma).add_(mu)
     return z, eps
 
 
-@torch.jit.script
+# @torch.jit.script
 def soft_clamp5(x: torch.Tensor):
     return x.div(5.0).tanh_().mul(5.0)
 

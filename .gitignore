@@ -18,3 +18,10 @@ runs
 facelet_bank
 log*
 regenerate_jansel.sh
+temp*
+result*
+output_file*
+output*
+error_*
+datas/
+*.*

@@ -124,13 +124,45 @@ def get_skiplist(main_args):
         return SKIP.get(main_args.backend)
 
 
+def get_eagerlist(main_args):
+    return SKIP.get("eager_mode")
+
 SKIP_DYNAMO_EAGER = [
     "./generated/test_deepinsight_insightface.py:deeplab_xception_transfer_basemodel",  # try ... catch ...
     "./generated/test_BlinkDL_RWKV_LM.py:RWKV_ChannelMix",  # Subclasses torch.jit.ScriptModule
 ]
+
+SKIP_INDUCTOR_MODE = [
+    "./generated/test_DerrickWang005_CRIS_pytorch.py:ResidualAttentionBlock",
+    "./generated/test_DerrickWang005_CRIS_pytorch.py:Transformer",
+    "./generated/test_facebookresearch_fairscale.py:TransformerEncoderLayer",
+    "./generated/test_facebookresearch_multimodal.py:AttentionPool2d",
+    "./generated/test_facebookresearch_pycls.py:MultiheadAttention",
+    "./generated/test_jayleicn_moment_detr.py:Transformer",
+    "./generated/test_jayleicn_moment_detr.py:ResidualAttentionBlock",
+    "./generated/test_jayleicn_moment_detr.py:AttentionPool2d",
+    "./generated/test_j_min_CLIP_Caption_Reward.py:Transformer",
+    "./generated/test_j_min_CLIP_Caption_Reward.py:ResidualAttentionBlock",
+    "./generated/test_NVlabs_GroupViT.py:ResidualAttentionBlock",
+    "./generated/test_NVlabs_imaginaire.py:AttentionPool2d",
+    "./generated/test_songyouwei_ABSA_PyTorch.py:SqueezeEmbedding",
+    "./generated/test_yangheng95_PyABSA.py:SqueezeEmbedding",
+    "./generated/test_ylsung_VL_adapter.py:ResidualAttentionBlock",
+    "./generated/test_ylsung_VL_adapter.py:Transformer",
+    "./generated/test_lordmartian_deep_avsr.py:AudioNet",
+    "./generated/test_ShomyLiu_Neu_Review_Rec.py:SelfAtt",
+    "./generated/test_YatingMusic_MuseMorphose.py:VAETransformerEncoder",
+    "./generated/test_assassint2017_abdominal_multi_organ_segmentation.py:CELoss",
+    "./generated/test_ChristophReich1996_Swin_Transformer_V2.py:DeformableSwinTransformerBlock",
+    "./generated/test_ACheun9_Pytorch_implementation_of_Mobile_Former.py:SeModule",
+    # "./generated/test_4uiiurz1_pytorch_res2net.py:ImageNetRes2Net",
+    # "./generated/test_andrewliao11_dni_pytorch.py:dni_Conv2d",
+]
+
 SKIP_INDUCTOR = []
 SKIP = {
     "eager": SKIP_DYNAMO_EAGER,
     "inductor": SKIP_DYNAMO_EAGER + SKIP_INDUCTOR,
     "export": SKIP_DYNAMO_EAGER,
+    "eager_mode": SKIP_INDUCTOR_MODE
 }

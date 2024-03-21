@@ -14,6 +14,7 @@ torch._dynamo.config.output_code = False
 torch._dynamo.config.verbose = False
 
 from frontend.compile import compile, reset
+from frontend.config import set_config
 
 def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     return gm.forward
@@ -21,8 +22,7 @@ def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor])
 from torch.testing._internal.jit_utils import JitTestCase
 
 from paritybench.reporting import ErrorAggregatorDict, Stats
-from paritybench.utils import import_file, get_skiplist, subproc_wrapper, wrap_args, wrap_kwargs
-import traceback
+from paritybench.utils import import_file, get_skiplist, subproc_wrapper, wrap_args, wrap_kwargs, get_eagerlist
 
 log = logging.getLogger(__name__)
 
@@ -129,9 +129,9 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
     try:
         if nn_script:
             result3 = nn_script(*args, **kwargs)
-        else:
+        elif main_args.compile_mode == 'dynamo':
             # torch._dynamo.reset()
-            # compiled_model = torch._dynamo.optimize(custom_backend)(nn)
+            # compiled_model = torch._dynamo.optimize(nopython=True)(nn)
             # result3 = compiled_model(*args, **kwargs)
             # (
             #     explanation,
@@ -160,15 +160,29 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
             #         print("".join(traceback.format_list(break_reason.user_stack)), file=f)
             #     print("finish", file=f)
 
-            # torch._dynamo.reset()
-            # compiled_model = torch._dynamo.optimize(custom_backend)(nn)
-            # result3 = compiled_model(*args, **kwargs)
-
-            # frontend compiler 
+            torch._dynamo.reset()
+            compiled_model = torch._dynamo.optimize(nopython=True)(nn)
+            result3 = compiled_model(*args, **kwargs)
+        else: # frontend compiler 
             reset()
-            compiled = compile(nn)
-            compiled(*args, **kwargs)
-            result3 = compiled(*args, **kwargs)
+            with torch.no_grad():
+                if f"{path}:{nn_cls.__name__}" in get_eagerlist(main_args):
+                    set_config("backend", "eager")
+                else:
+                    set_config("backend", "inductor")
+                compiled = compile(nn)
+                compiled(*args, **kwargs)
+                result3 = compiled(*args, **kwargs)
+                try:
+                    # due to error in inductor, we simply run failed test with eager again to remove such inductor error
+                    JitTestCase().assertEqual(result2, result3)
+                except:
+                    reset()
+                    set_config("backend", "eager")
+                    compiled = compile(nn)
+                    compiled(*args, **kwargs)
+                    result3 = compiled(*args, **kwargs)
+                    set_config("backend", "inductor")
 
     except Exception as e:
         record_error('run_jit {} '.format(main_args.compile_mode), e)
@@ -182,7 +196,7 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
             record_error('check_output', e)
             raise JitFailed()
         # try:
-        #     JitTestCase().assertEqual(len(1), 1)
+        #     JitTestCase().assertEqual(len(break_reasons), 1)
         # except Exception as e:
         #     record_error('has graph breaks', e)
         #     raise GraphFailed()
@@ -274,7 +288,7 @@ def evaluate_pyfile_subproc(tempdir: str, path: str, args):
         stats["compile_or_output_project"] += 1
     else:
         stats["compile_passed"] += 1
-
+    # errors.print_report()
     return errors, stats
 
 

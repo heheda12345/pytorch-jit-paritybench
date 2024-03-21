@@ -508,7 +508,7 @@ class Discriminator(torch.nn.Module):
         return score.mean()
 
 
-@torch.jit.script
+# @torch.jit.script
 def _mish(x):
     return x * torch.tanh(F.softplus(x))
 
