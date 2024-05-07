@@ -15,6 +15,7 @@ from typing import List
 
 from frontend.compile import compile, reset
 from frontend.config import set_config
+evaluate_performance = False
 
 def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     return gm.forward
@@ -131,7 +132,7 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
             result3 = nn_script(*args, **kwargs)
         elif main_args.compile_mode == 'dynamo':
             torch._dynamo.reset()
-            compiled_model = torch._dynamo.optimize(custom_backend, nopython=True)(nn)
+            compiled_model = torch._dynamo.optimize(nopython=True)(nn)
             result3 = compiled_model(*args, **kwargs)
         elif main_args.compile_mode == 'sys':
             reset()
@@ -165,6 +166,56 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
         except Exception as e:
             record_error('check_output', e)
             raise JitFailed()
+        else: # performance evaluation
+            if (evaluate_performance):
+                elapsed_time_ms = 0
+                iteration = 100
+                # warm-up
+                for _ in range(100):
+                    if main_args.compile_mode == 'dynamo':
+                        compiled_model(*args, **kwargs)
+                    elif main_args.compile_mode == 'sys':
+                        with torch.no_grad():
+                            compiled(*args, **kwargs)
+
+                if main_args.compile_mode == 'dynamo':
+                    for _ in range(iteration):
+                        start_event = torch.cuda.Event(enable_timing=True)
+                        end_event = torch.cuda.Event(enable_timing=True)
+                        torch.cuda.synchronize()
+                        start_event.record()
+
+                        y = compiled_model(*args, **kwargs)
+
+                        end_event.record()
+                        torch.cuda.synchronize()
+                        
+                        elapsed_time_ms += start_event.elapsed_time(end_event)
+                elif main_args.compile_mode == 'sys':
+                    for _ in range(iteration):
+                        with torch.no_grad():
+                            start_event = torch.cuda.Event(enable_timing=True)
+                            end_event = torch.cuda.Event(enable_timing=True)
+                            torch.cuda.synchronize()
+                            start_event.record()
+
+                            y = compiled(*args, **kwargs)
+
+                            end_event.record()
+                            torch.cuda.synchronize()
+                            
+                            elapsed_time_ms += start_event.elapsed_time(end_event)
+                dynamo_path = "/home/drc/build-frontend/paritybench/perf-dynamo"
+                sys_path = "/home/drc/build-frontend/paritybench/perf-sys"
+                import sys
+                print(f"{path}:{elapsed_time_ms}")
+                print(f"{path}:{elapsed_time_ms}", file=sys.stderr)
+                if main_args.compile_mode == 'dynamo':
+                    with open(dynamo_path, "a+") as f:
+                        print(f"{path}:{elapsed_time_ms}", file=f)
+                elif main_args.compile_mode == 'sys':
+                    with open(sys_path, "a+") as f:
+                        print(f"{path}:{elapsed_time_ms}", file=f)
     except AssertionError:
         record_error("wrong_result", e)
         raise PytorchFailed()
