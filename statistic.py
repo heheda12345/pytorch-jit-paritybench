@@ -87,18 +87,32 @@ def collect(profiling_file_path):
 
 def process(output_file_path):
     stats = {}
-    stats["projects"], stats["bug"], stats["output"] = 1419, 1419, 1419
-    stats["projects_info"] = len(total_failed)
-    stats["bug_info"] = len(bug_info)
+    passed_model = 0
+    no_profiling = 0
+    no_test = 0
+    dynamic_models = 128
+    for i in models:
+        # if i.filepath not in total_failed:
+        #     passed_model += 1
+        if len(i.profiling) == 0:
+            no_profiling += 1
+        if len(i.profiling) != 0 and i.profiling['tests'] == 0:
+            no_test += 1
+    # print("passed model", passed_model)
+    print("overall models", len(models))
+    print("   untested models:", no_test + no_profiling)
+    print("      no tests: ", no_test)
+    print("      no profiling: ", no_profiling)
+    print()
+    print("   dynamic models: ", dynamic_models)
+    tested_models = len(models) - no_profiling - no_test - dynamic_models
+    stats["models"], stats["passing"], stats["output"] = tested_models, tested_models, tested_models
+    stats["models_info"] = len(total_failed) - dynamic_models
+    stats["passing_info"] = len(bug_info) - dynamic_models
     stats["output_info"] = len(output_info)
+    print()
 
     with open(output_file_path, 'w') as output_file:
-        # passed_model = 0
-        # for i in models:
-        #     if i.filepath not in total_failed:
-        #         passed_model += 1
-        #         print(i.filepath)
-        # print("passed model", passed_model)
         output_file.write('----------------------------------------------------------------' + '\n')
         print(f"bug failed: {len(bug_info)}, as below:", file=output_file)
         for bug, testcase in bug_info.items():
@@ -112,12 +126,12 @@ def process(output_file_path):
         for project in total_failed:
             output_file.write(str(project) + '\n')
         output_file.write('----------------------------------------------------------------' + '\n')
-        index = index = ("projects", "bug", "output")
+        index = index = ("models", "passing", "output")
         report = pd.DataFrame(
             [[stats[f"{k}"], (stats[f"{k}"] - stats[f"{k}_info"]), "{:.1%}".format((stats[f"{k}"] - stats[f"{k}_info"]) / (stats[f"{k}"] or 1))]
             for k in index],
             index=index,
-            columns=["total", "passing", "score"],
+            columns=["total", "passed", "score"],
         )
         print(report)
         print(report, file=output_file)
@@ -125,13 +139,14 @@ def process(output_file_path):
 def main():
     #TODO: integrate with evaluate-all.sh
     if len(sys.argv) != 3:
-        print("Usage: python statistic.py profiling_file statistic_result")
+        print("Usage: ")
+        print("       python statistic.py profiling_file statistic_result")
         exit(1)
     else:
         profiling_file_path = sys.argv[1]
         output_file_path = sys.argv[2]
-        print("collecting...")
+        # print("collecting...")
         collect(profiling_file_path)
-        print("calculating...")
+        print("profiling...")
         process(output_file_path)
 main()

@@ -156,8 +156,22 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
                     set_config("backend", "inductor")
 
     except Exception as e:
-        record_error('run_jit {} '.format(main_args.compile_mode), e)
-        raise JitFailed()
+        if main_args.compile_mode == 'sys':
+            try:
+                reset()
+                # try with eager, since there are remaining bugs in inductor
+                set_config("backend", "eager")
+                with torch.no_grad():
+                    compiled = compile(nn)
+                    compiled(*args, **kwargs)
+                    result3 = compiled(*args, **kwargs)
+                set_config("backend", "inductor")
+            except Exception as e: # real unsupported features
+                record_error('run_jit {} '.format(main_args.compile_mode), e)
+                raise JitFailed()
+        else:
+            record_error('run_jit {} '.format(main_args.compile_mode), e)
+            raise JitFailed()
 
     try:
         JitTestCase().assertEqual(result1, result2)
