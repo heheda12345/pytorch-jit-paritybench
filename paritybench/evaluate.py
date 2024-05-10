@@ -16,6 +16,7 @@ from typing import List
 from frontend.compile import compile, reset
 from frontend.config import set_config
 evaluate_performance = False
+enable_eager = False
 
 def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     return gm.forward
@@ -73,13 +74,13 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
     except Exception:
         pass
 
-    nn_script = None
-    if main_args.compile_mode == 'torchscript':
-        try:
-            nn_script = torch.jit.script(nn)
-        except Exception as e:
-            record_error('compile {}'.format(main_args.compile_mode), e)
-            raise JitFailed()
+    # nn_script = None
+    # if main_args.compile_mode == 'torchscript':
+    #     try:
+    #         nn_script = torch.jit.script(nn)
+    #     except Exception as e:
+    #         record_error('compile {}'.format(main_args.compile_mode), e)
+    #         raise JitFailed()
 
     try:
         args, kwargs = get_forward_args()
@@ -127,6 +128,14 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
 
         return True
 
+    nn_script = None
+    if main_args.compile_mode == 'torchscript':
+        try:
+            nn_script = torch.jit.script(nn)
+        except Exception as e:
+            record_error('compile {}'.format(main_args.compile_mode), e)
+            raise JitFailed()
+    
     try:
         if nn_script:
             result3 = nn_script(*args, **kwargs)
@@ -134,7 +143,15 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
             torch._dynamo.reset()
             compiled_model = torch._dynamo.optimize(nopython=True)(nn)
             result3 = compiled_model(*args, **kwargs)
+            if enable_eager:
+                try:
+                    JitTestCase().assertEqual(result2, result3)
+                except:
+                    torch._dynamo.reset()
+                    compiled_model = torch._dynamo.optimize(nopython=True, backend=custom_backend)(nn)
+                    result3 = compiled_model(*args, **kwargs)
         elif main_args.compile_mode == 'sys':
+            enable_eager = True
             reset()
             with torch.no_grad():
                 if f"{path}:{nn_cls.__name__}" in get_eagerlist(main_args):
@@ -144,16 +161,17 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
                 compiled = compile(nn)
                 compiled(*args, **kwargs)
                 result3 = compiled(*args, **kwargs)
-                try:
-                    # due to error in inductor, we simply run failed test with eager again to remove such inductor error
-                    JitTestCase().assertEqual(result2, result3)
-                except:
-                    reset()
-                    set_config("backend", "eager")
-                    compiled = compile(nn)
-                    compiled(*args, **kwargs)
-                    result3 = compiled(*args, **kwargs)
-                    set_config("backend", "inductor")
+                if enable_eager:
+                    try:
+                        # due to error in inductor, we simply run failed test with eager again to remove such inductor error
+                        JitTestCase().assertEqual(result2, result3)
+                    except:
+                        reset()
+                        set_config("backend", "eager")
+                        compiled = compile(nn)
+                        compiled(*args, **kwargs)
+                        result3 = compiled(*args, **kwargs)
+                        set_config("backend", "inductor")
 
     except Exception as e:
         if main_args.compile_mode == 'sys':

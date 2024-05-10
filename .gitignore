@@ -24,4 +24,9 @@ output_file*
 output*
 error_*
 datas/
-*.*
+perf.sh
+perf-*
+err_*
+zzz_*
+evaluate.sh
+.temp*
