@@ -10,8 +10,8 @@ fi
 num_tasks=$(<"${task_file}" wc -l)
 echo Running with $execution_mode mode
 echo Submitting $num_tasks tasks
-time_tag=$(date +%y%m%d-%H%M%S)
-log_dir="logs/${time_tag}"
+
+log_dir="logs/${execution_mode}"
 mkdir -p "${log_dir}"
 echo Log directory: $log_dir
 sbatch --array="1-$num_tasks" ./run_single_test.sh "$log_dir" "$task_file" "$execution_mode"
