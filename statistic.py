@@ -126,8 +126,8 @@ def process(output_file_path, mode):
     stats["models_info"] = len(total_failed) - dynamic_models
     stats["passing_info"] = len(bug_info) - dynamic_models
     if mode == "dynamo" or mode == "torchscript":
-        stats["models_info"] -= 1
-        stats["passing_info"] -= 1
+        stats["models_info"] += 1
+        stats["passing_info"] += 1
     stats["output_info"] = len(output_info)
     print()
 
