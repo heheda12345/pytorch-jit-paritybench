@@ -16,7 +16,6 @@ from typing import List
 from frontend.compile import compile, reset
 from frontend.config import set_config
 evaluate_performance = False
-enable_eager = False
 
 def custom_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     return gm.forward
@@ -58,6 +57,7 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
     :param record_error: function to record an exception for debugging/reporting
     :return: True if the test passes
     """
+    enable_eager = False
     try:
         args, kwargs = get_init_args()
         nn = nn_cls(*args, **kwargs)
