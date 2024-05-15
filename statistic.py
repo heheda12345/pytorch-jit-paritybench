@@ -173,6 +173,6 @@ def main():
         output_file_path = sys.argv[3]
         # print("collecting...")
         collect(profiling_file_path, compilation_mode)
-        print("profiling...")
+        print("analyzing...")
         process(output_file_path, compilation_mode)
 main()
