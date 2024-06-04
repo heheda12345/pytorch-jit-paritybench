@@ -25,20 +25,36 @@ class Model():
         self.filepath = filepath
         self.profiling = {}
 
-def collector(match):
-    stats_data = {
-        # 'total': int(match.group(1)),
-        # 'init_ok': int(match.group(2)),
-        # 'deduced_args_ok': int(match.group(3)),
-        # 'jit_compiles': int(match.group(4)),
-        'projects': int(match.group(5)),
-        # 'projects_passed': int(match.group(6)),
-        'projects_failed': int(match.group(9)),
-        'tests': int(match.group(12)),
-        'tests_passed': int(match.group(13)),
-        'tests_failed': int(match.group(14)),
-        'random_failed': int(match.group(15))
-    }
+def collector(match, source):
+    if source == 'std':
+        stats_data = {
+            # 'total': int(match.group(1)),
+            # 'init_ok': int(match.group(2)),
+            # 'deduced_args_ok': int(match.group(3)),
+            # 'jit_compiles': int(match.group(4)),
+            'projects': int(match.group(5)),
+            # 'projects_passed': int(match.group(6)),
+            'projects_failed': int(match.group(9)),
+            'tests': int(match.group(12)),
+            'tests_passed': int(match.group(13)),
+            'tests_failed': int(match.group(14)),
+            'random_failed': int(match.group(15))
+        }
+    elif source == 'eager':
+        stats_data = {
+            # 'total': int(match.group(1)),
+            # 'init_ok': int(match.group(2)),
+            # 'deduced_args_ok': int(match.group(3)),
+            # 'jit_compiles': int(match.group(4)),
+            'projects': int(match.group(5)),
+            # 'projects_passed': int(match.group(6)),
+            'projects_failed': int(match.group(9)),
+            'tests': int(match.group(12)),
+            'tests_passed': int(match.group(13)),
+            'tests_failed': int(match.group(14)),
+            'random_failed': int(match.group(15)),
+            'eager_failed': int(match.group(20)),
+        }
     return stats_data
 
 def bug_collector(match):
@@ -82,9 +98,9 @@ def collect(profiling_file_path, compilation_mode):
             if file_match:
                 model = Model(file_match.group(1))
             if std_match and model is not None:
-                model.profiling = collector(std_match)
+                model.profiling = collector(std_match, 'std')
             if eager_match and model is not None:
-                model.profiling = collector(eager_match)
+                model.profiling = collector(eager_match, 'eager')
             if bug_match and model is not None:
                 filename = bug_collector(bug_match)
                 assert filename in model.filepath
@@ -103,16 +119,39 @@ def process(output_file_path, mode):
     dynamic_models = []
     # dynamic_models = 128
 
+    eager_dynamic = []
     with open("dynamic_models.txt", "r") as dy:
         for i in dy:
             dynamic_models.append(i.strip())
-    print("check ", len(dynamic_models))
 
     for i in models:
         if len(i.profiling) == 0:
             no_profiling += 1
-        if len(i.profiling) != 0 and i.profiling['tests'] == 0:
+            continue
+        # if len(i.profiling) != 0 and i.profiling['tests'] == 0:
+        #     no_test += 1
+        # case1
+        if i.profiling['random_failed'] == 0 and i.profiling['tests'] == 0 and 'eager_failed' in i.profiling:
             no_test += 1
+        elif i.profiling['random_failed'] > 0:
+            eager_dynamic.append(i.filepath)
+    
+    print("checking no test: ", no_test)
+    print("checking eager dynamic:", len(eager_dynamic))
+    
+    graph_dynamic = 0
+    for dy in dynamic_models:
+        check = False
+        for eager in eager_dynamic:
+            if dy in eager:
+                check = True
+                break
+        if not check:
+            graph_dynamic += 1
+            # print("jit dynamic: ", dy , ".py")
+    print("checking graph dynamic:", graph_dynamic)
+    print("  -remaining models: ", len(models) - no_profiling - no_test- len(eager_dynamic) - graph_dynamic)
+
 
     if mode == "dynamo" or mode == "torchscript":
         # we found test_zhixinshu_DeformingAutoencoders_pytorch.py is missing output in dynamo,
