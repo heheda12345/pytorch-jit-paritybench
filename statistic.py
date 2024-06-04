@@ -100,7 +100,13 @@ def process(output_file_path, mode):
     stats = {}
     no_profiling = 0
     no_test = 0
-    dynamic_models = 128
+    dynamic_models = []
+    # dynamic_models = 128
+
+    with open("dynamic_models.txt", "r") as dy:
+        for i in dy:
+            dynamic_models.append(i.strip())
+    print("check ", len(dynamic_models))
 
     for i in models:
         if len(i.profiling) == 0:
@@ -119,12 +125,12 @@ def process(output_file_path, mode):
     print("    --no profiling: ", no_profiling)
     print()
     print("  -remaining models: ", len(models) - no_profiling - no_test)
-    print("  -dynamic models:   ", dynamic_models)
-    print("  -static models:    ", len(models) - no_profiling - no_test - dynamic_models)
-    tested_models = len(models) - no_profiling - no_test - dynamic_models
+    print("  -dynamic models:   ", len(dynamic_models))
+    print("  -static models:    ", len(models) - no_profiling - no_test - len(dynamic_models))
+    tested_models = len(models) - no_profiling - no_test - len(dynamic_models)
     stats["models"], stats["passing"], stats["output"] = tested_models, tested_models, tested_models
-    stats["models_info"] = len(total_failed) - dynamic_models
-    stats["passing_info"] = len(bug_info) - dynamic_models
+    stats["models_info"] = len(total_failed) - len(dynamic_models)
+    stats["passing_info"] = len(bug_info) - len(dynamic_models)
     if mode == "dynamo" or mode == "torchscript":
         stats["models_info"] += 1
         stats["passing_info"] += 1
@@ -144,6 +150,19 @@ def process(output_file_path, mode):
         print(f'total failed:{len(total_failed)}\n', file=output_file)
         for project in total_failed:
             output_file.write(str(project) + '\n')
+        output_file.write('----------------------------------------------------------------' + '\n')
+        missing_dy_count = 0
+        for i in dynamic_models:
+            check = False
+            for j in total_failed:
+                if i in j:
+                    check = True
+                    break
+            if not check:
+                output_file.write(str(i) + ".py" + '\n')
+                missing_dy_count += 1
+        print("there are ", missing_dy_count, " dynamic models running correctly!\n")
+        print("there are ", missing_dy_count, " dynamic models running correctly!\n", file=output_file)
         output_file.write('----------------------------------------------------------------' + '\n')
         index = index = ("models", "output")
         report = pd.DataFrame(

@@ -175,6 +175,9 @@ def evaluate_nn_module(nn_cls, get_init_args, get_forward_args, record_error, ma
 
     except Exception as e:
         if main_args.compile_mode == 'sys':
+            if isinstance(e, torch._subclasses.fake_tensor.DynamicOutputShapeException) or isinstance(e, torch._subclasses.fake_tensor.DataDependentOutputException):
+                record_error('run_jit {} '.format(main_args.compile_mode), e)
+                raise JitFailed()
             try:
                 reset()
                 # try with eager, since there are remaining bugs in inductor
