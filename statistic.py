@@ -219,7 +219,7 @@ def process(output_file_path, mode):
             if not check:
                 output_file.write(str(i) + ".py" + '\n')
                 missing_dy_count += 1
-        print("there are ", missing_dy_count, " dynamic models running correctly!\n")
+        # print("there are ", missing_dy_count, " dynamic models running correctly!\n")
         print("there are ", missing_dy_count, " dynamic models running correctly!\n", file=output_file)
         output_file.write('----------------------------------------------------------------' + '\n')
         index = index = ("models", "output")
