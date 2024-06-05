@@ -186,12 +186,7 @@ def process(output_file_path, mode):
                 check = True
                 break
     
-    # for i in range(0, len(total_failed)):
-    #     if i not in details:
-    #         print("sd ", temp_all_failed[i])
     stats["models"], stats["passing"], stats["output"] = tested_models, tested_models, tested_models
-    # print("total failed", len(total_failed))
-    # print("check hit:", hit_count)
     stats["models_info"] = len(total_failed) - hit_count
     stats["passing_info"] = len(bug_info) - hit_count
     if mode == "dynamo" or mode == "torchscript":
