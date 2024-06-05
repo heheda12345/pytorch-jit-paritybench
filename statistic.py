@@ -25,20 +25,36 @@ class Model():
         self.filepath = filepath
         self.profiling = {}
 
-def collector(match):
-    stats_data = {
-        # 'total': int(match.group(1)),
-        # 'init_ok': int(match.group(2)),
-        # 'deduced_args_ok': int(match.group(3)),
-        # 'jit_compiles': int(match.group(4)),
-        'projects': int(match.group(5)),
-        # 'projects_passed': int(match.group(6)),
-        'projects_failed': int(match.group(9)),
-        'tests': int(match.group(12)),
-        'tests_passed': int(match.group(13)),
-        'tests_failed': int(match.group(14)),
-        'random_failed': int(match.group(15))
-    }
+def collector(match, source):
+    if source == 'std':
+        stats_data = {
+            # 'total': int(match.group(1)),
+            # 'init_ok': int(match.group(2)),
+            # 'deduced_args_ok': int(match.group(3)),
+            # 'jit_compiles': int(match.group(4)),
+            'projects': int(match.group(5)),
+            # 'projects_passed': int(match.group(6)),
+            'projects_failed': int(match.group(9)),
+            'tests': int(match.group(12)),
+            'tests_passed': int(match.group(13)),
+            'tests_failed': int(match.group(14)),
+            'random_failed': int(match.group(15))
+        }
+    elif source == 'eager':
+        stats_data = {
+            # 'total': int(match.group(1)),
+            # 'init_ok': int(match.group(2)),
+            # 'deduced_args_ok': int(match.group(3)),
+            # 'jit_compiles': int(match.group(4)),
+            'projects': int(match.group(5)),
+            # 'projects_passed': int(match.group(6)),
+            'projects_failed': int(match.group(9)),
+            'tests': int(match.group(12)),
+            'tests_passed': int(match.group(13)),
+            'tests_failed': int(match.group(14)),
+            'random_failed': int(match.group(15)),
+            'eager_failed': int(match.group(20)),
+        }
     return stats_data
 
 def bug_collector(match):
@@ -82,9 +98,9 @@ def collect(profiling_file_path, compilation_mode):
             if file_match:
                 model = Model(file_match.group(1))
             if std_match and model is not None:
-                model.profiling = collector(std_match)
+                model.profiling = collector(std_match, 'std')
             if eager_match and model is not None:
-                model.profiling = collector(eager_match)
+                model.profiling = collector(eager_match, 'eager')
             if bug_match and model is not None:
                 filename = bug_collector(bug_match)
                 assert filename in model.filepath
@@ -100,19 +116,45 @@ def process(output_file_path, mode):
     stats = {}
     no_profiling = 0
     no_test = 0
+    eager_failed = 0
     dynamic_models = []
+    eager_dynamic = []
+    graph_dynamic = 0
+    dynamic_overall = []
     # dynamic_models = 128
 
     with open("dynamic_models.txt", "r") as dy:
         for i in dy:
             dynamic_models.append(i.strip())
-    print("check ", len(dynamic_models))
 
     for i in models:
         if len(i.profiling) == 0:
             no_profiling += 1
-        if len(i.profiling) != 0 and i.profiling['tests'] == 0:
-            no_test += 1
+
+        # if len(i.profiling) != 0 and i.profiling['tests'] == 0:
+        #     no_test += 1
+        elif len(i.profiling) != 0 and i.profiling['random_failed'] == 0 and i.profiling['tests'] == 0:
+            if 'eager_failed' in i.profiling:
+                eager_failed += 1
+            else:
+                no_test += 1
+        elif len(i.profiling) != 0 and i.profiling['random_failed'] > 0:
+            eager_dynamic.append(i.filepath)
+    
+    overlapped = []
+    for dy in dynamic_models:
+        check = False
+        for eager in eager_dynamic:
+            if dy in eager:
+                overlapped.append(dy)
+                eager_dynamic.remove(eager)
+                check = True
+                break
+        if not check:
+            graph_dynamic += 1
+            # print("jit dynamic: ", dy , ".py")
+
+    dynamic_overall = dynamic_models + eager_dynamic
 
     if mode == "dynamo" or mode == "torchscript":
         # we found test_zhixinshu_DeformingAutoencoders_pytorch.py is missing output in dynamo,
@@ -120,17 +162,33 @@ def process(output_file_path, mode):
         no_profiling -= 1
 
     print("overall models", len(models))
-    print("  -untested models:", no_test + no_profiling)
-    print("    --no tests:     ", no_test)
-    print("    --no profiling: ", no_profiling)
+    print("  -untested models:  ", no_test + no_profiling + eager_failed)
+    print("    --no tests:      ", no_test)
+    print("    --all crashed:   ", eager_failed)
+    print("    --no profiling:  ", no_profiling)
     print()
-    print("  -remaining models: ", len(models) - no_profiling - no_test)
-    print("  -dynamic models:   ", len(dynamic_models))
-    print("  -static models:    ", len(models) - no_profiling - no_test - len(dynamic_models))
-    tested_models = len(models) - no_profiling - no_test - len(dynamic_models)
+    print("  -remaining models:       ", len(models) - no_profiling - no_test - eager_failed)
+    print("  -dynamic overall models: ", len(dynamic_overall))
+    print("     --eager dynamic:      ", len(eager_dynamic) + len(overlapped))
+    print("     --graph dynamic:      ", graph_dynamic)
+    print("  -static models:    ", len(models) - no_profiling - no_test - eager_failed - len(dynamic_overall))
+    tested_models = len(models) - no_profiling - no_test - eager_failed - len(dynamic_overall)
+
+    details = []
+    temp_all_failed = list(total_failed)
+    hit_count = 0
+    for i in dynamic_overall:
+        check = False
+        for index, j in enumerate(temp_all_failed):
+            if i in j:
+                hit_count += 1
+                details.append(index)
+                check = True
+                break
+    
     stats["models"], stats["passing"], stats["output"] = tested_models, tested_models, tested_models
-    stats["models_info"] = len(total_failed) - len(dynamic_models)
-    stats["passing_info"] = len(bug_info) - len(dynamic_models)
+    stats["models_info"] = len(total_failed) - hit_count
+    stats["passing_info"] = len(bug_info) - hit_count
     if mode == "dynamo" or mode == "torchscript":
         stats["models_info"] += 1
         stats["passing_info"] += 1
