@@ -174,16 +174,24 @@ def process(output_file_path, mode):
     print("  -static models:    ", len(models) - no_profiling - no_test - eager_failed - len(dynamic_overall))
     tested_models = len(models) - no_profiling - no_test - eager_failed - len(dynamic_overall)
 
+    details = []
+    temp_all_failed = list(total_failed)
     hit_count = 0
     for i in dynamic_overall:
         check = False
-        for j in total_failed:
+        for index, j in enumerate(temp_all_failed):
             if i in j:
                 hit_count += 1
+                details.append(index)
                 check = True
                 break
+    
+    # for i in range(0, len(total_failed)):
+    #     if i not in details:
+    #         print("sd ", temp_all_failed[i])
     stats["models"], stats["passing"], stats["output"] = tested_models, tested_models, tested_models
-    print("total failed", len(total_failed))
+    # print("total failed", len(total_failed))
+    # print("check hit:", hit_count)
     stats["models_info"] = len(total_failed) - hit_count
     stats["passing_info"] = len(bug_info) - hit_count
     if mode == "dynamo" or mode == "torchscript":
